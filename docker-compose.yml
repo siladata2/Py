@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  sila-backend:
+    build: ./backend
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend/static:/app/static
+    environment:
+      - LHOST=silatech.site
+      - LPORT=443
+    restart: always
